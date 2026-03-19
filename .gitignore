@@ -15,3 +15,4 @@ wheels/
 # Some weird artifacts
 .root_hist
 .python-version
+.claude/

@@ -19,5 +19,5 @@ dev = [
 
 [tool.poe.tasks]
 runloc='uv run snakemake --cores 8   --use-singularity   --singularity-args "--bind /volatile:/volatile --bind /cvmfs:/cvmfs"'
-lslog='ls /volatile/eic/romanov/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1/log'
-rmall='rm -rf /volatile/eic/romanov/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1/*'
+lslog='ls ${OUT_BASE}/logs'
+rmall='rm -rf ${OUT_BASE}/*'

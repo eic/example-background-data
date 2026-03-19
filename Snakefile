@@ -8,16 +8,22 @@
 import os
 import glob
 
-# --- Inputs / Outputs (hardcoded, no config) ---------------------------------
+# --- Inputs / Outputs ---------------------------------------------------------
 INPUT_DIR = "/volatile/eic/EPIC/RECO/25.10.4/epic_craterlake/Bkg_1SignalPer2usFrame/DIS/NC/10x100/minQ2=1"
 
-OUT_BASE  = "/volatile/eic/romanov/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1"
+OUT_BASE  = os.environ.get("OUT_BASE", "")
+if not OUT_BASE:
+    raise ValueError(
+        "OUT_BASE environment variable is not set. Example:\n"
+        "  export OUT_BASE=/volatile/eic/$USER/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1"
+    )
+
 CSV_DIR   = f"{OUT_BASE}/csv"
 ZIP_DIR   = f"{OUT_BASE}/csv-zip"
 LOG_DIR   = f"{OUT_BASE}/logs"
 
-# ROOT macro + argument
-MACRO     = f"/work/eic3/users/romanov/ai-background/trk_hits_to_csv.cxx"
+# ROOT macro - assumed to be in the same directory as Snakefile
+MACRO     = os.path.join(workflow.basedir, "trk_hits_to_csv.cxx")
 
 # Container image (Snakemake will run rules inside it when you launch with --sdm apptainer)
 container: "/cvmfs/singularity.opensciencegrid.org/eicweb/eic_xl:nightly"

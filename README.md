@@ -1,65 +1,90 @@
-Here’s a README-ready summary of what we’re doing, what to install with **uv**, and the **common Snakemake commands** to run it locally or on **SLURM**.
+# ePIC Tracker Hits to CSV
 
----
+Extract tracker hit data from ePIC simulation ROOT files (edm4eic format) into CSV for analysis and AI/ML training.
 
-## What this workflow does
+## Pipeline Overview
 
-For every `*.edm4eic.root` file in:
-
-`/volatile/eic/EPIC/RECO/25.10.4/epic_craterlake/Bkg_1SignalPer2usFrame/DIS/NC/10x100/minQ2=1`
-
-1. Run ROOT macro inside the container:
-
-```bash
-root -x -l -b -q 'trk_hits_to_csv.cxx("input.edm4eic.root", "…/csv/<sample>.hits.csv", 2)'
+```mermaid
+graph LR
+    A[".edm4eic.root files"] -->|root or cmake build| B["trk_hits_to_csv.cxx"]
+    B --> C[".csv files"]
+    C --> D["Analysis scripts\n(Python/matplotlib)"]
+    C --> E["AI/ML training"]
 ```
 
-Outputs:
+## Why edm4eic/edm4hep C++ and CSV?
 
-* CSVs → `/volatile/eic/romanov/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1/csv/`
-* Logs → `/volatile/eic/romanov/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1/logs/`
+We use **edm4eic** and **edm4hep** C++ libraries to read ePIC simulation data because they provide
+convenient navigation between linked objects (hits -> particles -> vertices, etc.) through PODIO relations.
 
-2. Zip each CSV into:
+We store the extracted data as **CSV** because:
 
-* ZIPs → `/volatile/eic/romanov/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1/csv-zip/`
+1. **Easy to produce in C++** - just format and write lines, no extra dependencies
+2. **Easy to plot with Python** - `pandas.read_csv()` + matplotlib (especially convenient with LLMs generating plot code)
+3. **Easy to use in AI/ML** - CSV loads directly into numpy, pandas, PyTorch datasets, etc.
+4. **Easy for students** - no special libraries needed to inspect or work with the data
 
-Container image (required):
+## Project Structure
 
-* `/cvmfs/singularity.opensciencegrid.org/eicweb/eic_xl:nightly`
+| File | Description |
+|------|-------------|
+| `trk_hits_to_csv.cxx` | C++ source - reads ROOT files, writes CSV (works as ROOT macro or standalone executable) |
+| `background_analysis.py` | Python script - plots tracker hits (time vs Z) from CSV |
+| `Snakefile` | Snakemake workflow - batch converts many ROOT files to CSV |
+| `run_jlab_slurm.sh` | SLURM submission script for JLab farm |
+| `CMakeLists.txt` | CMake build configuration for standalone executable |
+| `pyproject.toml` | Python dependencies (snakemake, pandas, matplotlib) |
 
----
+## Running the C++ Converter
 
-## Prerequisites
+`trk_hits_to_csv.cxx` can be used in two ways:
 
-* `uv` available on the system
-* `apptainer`/`singularity` available on compute nodes
-* Access to `/cvmfs` and `/volatile` on nodes (and bind mount them)
-* SLURM available for batch mode
-
----
-
-## Install (uv)
-
-Create a local venv and install Snakemake (+ the generic cluster executor plugin for SLURM):
-
-```bash
-rm -rf .venv
-uv venv --python 3.11 .venv
-
-uv pip install snakemake==9.14.6" snakemake-executor-plugin-cluster-generic
-```
-
-Sanity check (make sure you’re using the uv-installed Snakemake, not a module/system one):
+### Option 1: ROOT macro (no build step)
 
 ```bash
-uv run -p .venv snakemake --version
+root -x -l -b -q 'trk_hits_to_csv.cxx("input.edm4eic.root", "output.csv")'
+
+# Limit number of events:
+root -x -l -b -q 'trk_hits_to_csv.cxx("input.edm4eic.root", "output.csv", 100)'
 ```
 
-**Important:** always run Snakemake via `uv run …` so you don’t accidentally pick up an older `snakemake` from `PATH`.
+This is what Snakemake uses. Requires ROOT + edm4eic/edm4hep libraries available (e.g. inside the eic_xl container).
 
----
+### Option 2: CMake build (convenient for IDEs and development)
 
-## Run interactively (login node / local execution)
+```bash
+# Inside the eic_xl container or environment with all dependencies:
+mkdir build && cd build
+cmake ..
+make
+
+# Run:
+./trk_hits_to_csv -n 100 -o output.csv input.edm4eic.root
+```
+
+Building with CMake gives you IDE integration (code completion, debugging, etc.), which is helpful during development.
+
+## Setup
+
+We use [uv](https://docs.astral.sh/uv/) for Python dependency management:
+
+```bash
+uv sync
+```
+
+This installs snakemake, pandas, matplotlib, and other dependencies.
+
+## Configuring Output Paths
+
+The **Snakefile** reads output paths from environment variables. Before running, set:
+
+```bash
+export OUT_BASE="/volatile/eic/$USER/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1"
+```
+
+If `OUT_BASE` is not set, snakemake will error with a helpful message.
+
+## Running Locally
 
 Dry-run (shows what would run):
 
@@ -67,7 +92,7 @@ Dry-run (shows what would run):
 uv run snakemake -n
 ```
 
-Run with 8 cores, using the container + binds:
+Run with 8 cores inside the container:
 
 ```bash
 uv run snakemake --cores 8 \
@@ -75,25 +100,20 @@ uv run snakemake --cores 8 \
   --singularity-args "--bind /volatile:/volatile --bind /cvmfs:/cvmfs"
 ```
 
-Helpful flags:
+## Running on SLURM (JLab)
+
+Use the provided script:
 
 ```bash
-uv run snakemake --cores 8 \
-  --use-singularity \
-  --singularity-args "--bind /volatile:/volatile --bind /cvmfs:/cvmfs" \
-  --printshellcmds --rerun-incomplete --keep-going
+./run_jlab_slurm.sh /volatile/eic/$USER/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1
 ```
 
----
+This submits snakemake jobs to the SLURM production partition with up to 2000 concurrent jobs.
 
-## Run via SLURM (recommended)
-
-Use the **cluster-generic executor** (modern Snakemake way). This keeps SLURM submission explicit and readable.
-
-Example:
+Alternatively, run manually:
 
 ```bash
-OUT_BASE="/volatile/eic/romanov/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1"
+OUT_BASE="/volatile/eic/$USER/25.10.4_bkg-1signal-2us-frame_dis-nc_10x100_minq2-1"
 LOGS="${OUT_BASE}/logs"
 mkdir -p "$LOGS"
 
@@ -111,22 +131,18 @@ uv run snakemake \
   --singularity-args "--bind /volatile:/volatile --bind /cvmfs:/cvmfs"
 ```
 
-Notes:
+## Analysis
 
-* `-j 200` controls how many jobs Snakemake may have in-flight (queued/running).
-* `{threads}` comes from `threads:` in your Snakefile rules.
+Plot tracker hits for a given event:
 
----
+```bash
+uv run python background_analysis.py output.csv 0 -o event_0_hits.png
+```
 
-## Files
+## Prerequisites
 
-* `Snakefile` contains:
-
-  * discovery of `*.edm4eic.root`
-  * rule to produce CSV per input
-  * rule to zip each CSV
-  * `container: "/cvmfs/.../eic_xl:nightly"`
-
-* Keep `trk_hits_to_csv.cxx` in the workflow directory (or ensure it’s visible inside the container via binds).
-
----
+- `uv` for Python package management
+- `apptainer`/`singularity` on compute nodes
+- Access to `/cvmfs` and `/volatile` (JLab farm)
+- SLURM for batch mode
+- Container image: `/cvmfs/singularity.opensciencegrid.org/eicweb/eic_xl:nightly`
