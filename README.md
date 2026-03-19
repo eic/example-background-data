@@ -2,6 +2,16 @@
 
 Extract tracker hit data from ePIC simulation ROOT files (edm4eic format) into CSV for analysis and AI/ML training.
 
+<img src="https://github.com/eic/example-background-data/blob/main/event_3_time_vs_z.png?raw=true" width="800">
+
+**Key files:**
+- **`trk_hits_to_csv.cxx`** - C++ converter: reads `.edm4eic.root` → writes `.csv` (run as ROOT macro or build with CMake)
+- **`background_analysis.py`** - Python plotting script: reads CSV → produces hit scatter plots
+- **`Snakefile`** - Snakemake workflow: batch-processes many ROOT files on a cluster
+- **`run_jlab_slurm.sh`** - SLURM submission helper for JLab
+- **`CMakeLists.txt`** - CMake build for the C++ executable
+- **`pyproject.toml`** - Python deps (snakemake, pandas, matplotlib), managed with `uv`
+
 ## Pipeline Overview
 
 ```mermaid
@@ -23,17 +33,6 @@ We store the extracted data as **CSV** because:
 2. **Easy to plot with Python** - `pandas.read_csv()` + matplotlib (especially convenient with LLMs generating plot code)
 3. **Easy to use in AI/ML** - CSV loads directly into numpy, pandas, PyTorch datasets, etc.
 4. **Easy for students** - no special libraries needed to inspect or work with the data
-
-## Project Structure
-
-| File | Description |
-|------|-------------|
-| `trk_hits_to_csv.cxx` | C++ source - reads ROOT files, writes CSV (works as ROOT macro or standalone executable) |
-| `background_analysis.py` | Python script - plots tracker hits (time vs Z) from CSV |
-| `Snakefile` | Snakemake workflow - batch converts many ROOT files to CSV |
-| `run_jlab_slurm.sh` | SLURM submission script for JLab farm |
-| `CMakeLists.txt` | CMake build configuration for standalone executable |
-| `pyproject.toml` | Python dependencies (snakemake, pandas, matplotlib) |
 
 ## Running the C++ Converter
 
